@@ -1,0 +1,47 @@
+{
+  "name": "vector-db-demo",
+  "version": "1.0.0",
+  "description": "Demo of a vector database with Qdrant and LangChainx",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "ingest": "tsx src/ingestion/csvIngestion.ts",
+    "clean": "tsx src/utils/csvCleaner.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "vector-db",
+    "typescript",
+    "langchain",
+    "qdrant",
+    "ollama"
+  ],
+  "author": "Salim Laimeche",
+  "license": "MIT",
+  "dependencies": {
+    "@fastify/swagger": "^8.15.0",
+    "@fastify/swagger-ui": "^2.1.0",
+    "@langchain/community": "^0.0.34",
+    "@langchain/core": "^0.1.63",
+    "@langchain/langgraph": "^0.2.72",
+    "@langchain/ollama": "^0.2.0",
+    "@langchain/openai": "^0.0.14",
+    "@qdrant/js-client-rest": "^1.14.0",
+    "csv-parse": "^5.6.0",
+    "csv-stringify": "^6.5.2",
+    "dotenv": "^16.4.1",
+    "fastify": "^4.26.0",
+    "langchain": "^0.1.17",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.47",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.2"
+  },
+  "packageManager": "pnpm@10.8.0+sha512.0e82714d1b5b43c74610193cb20734897c1d00de89d0e18420aebc5977fa13d780a9cb05734624e81ebd81cc876cd464794850641c48b9544326b5622ca29971"
+}
