@@ -40,7 +40,6 @@ type CleanedEmbeddingRecord = z.infer<typeof CleanedEmbeddingSchema>;
 // Configuration Qdrant Cloud
 const qdrantUrl = process.env.QDRANT_URL || 'http://localhost:6333';
 const qdrantApiKey = process.env.QDRANT_API_KEY;
-const qdrantClusterName = process.env.QDRANT_CLUSTER_NAME;
 const collectionName = process.env.QDRANT_COLLECTION || 'salim_embeddings';
 
 // Vérifier que les variables d'environnement pour Qdrant Cloud sont définies
@@ -54,13 +53,17 @@ if (!process.env.OPENAI_API_KEY) {
 }
 
 // Initialiser le modèle d'embeddings
-// Note: Pour les embeddings, nous continuons à utiliser text-embedding-3-small car GPT_MODEL est pour les modèles de génération
 const embeddings = new OpenAIEmbeddings({
-  modelName: 'text-embedding-3-small', // Les modèles GPT ne sont pas adaptés pour les embeddings
+  modelName: 'text-embedding-3-small', 
   dimensions: 1536, // Dimension par défaut pour text-embedding-3-small
 });
 
-// Fonction pour générer des embeddings à partir du texte
+/**
+ * Génère des embeddings à partir du texte.
+ * 
+ * @param text - Texte à vectoriser.
+ * @returns Un tableau d'embeddings.
+ */
 async function generateEmbedding(text: string): Promise<number[]> {
   try {
     const embeddingResult = await embeddings.embedQuery(text);
@@ -71,7 +74,15 @@ async function generateEmbedding(text: string): Promise<number[]> {
   }
 }
 
-// Fonction pour créer une collection si elle n'existe pas
+/**
+ * Assure que la collection existe dans Qdrant.
+ * 
+ * Si la collection n'existe pas, elle est créée avec la dimension spécifiée.
+ * 
+ * @param client - Client Qdrant.
+ * @param dimension - Dimension des embeddings.
+ * @returns Une promesse qui se résout lorsque la collection est assurée.
+ */
 async function ensureCollection(client: QdrantClient, dimension: number): Promise<void> {
   try {
     const collections = await client.getCollections();
@@ -85,9 +96,41 @@ async function ensureCollection(client: QdrantClient, dimension: number): Promis
           distance: 'Cosine',
         },
       });
+      
+      // Créer un index pour le champ category
+      console.log(`Création d'un index pour le champ 'category'...`);
+      try {
+        await client.createPayloadIndex(collectionName, {
+          field_name: 'category',
+          field_schema: 'keyword',
+        });
+        console.log(`Index pour 'category' créé avec succès.`);
+      } catch (indexError) {
+        console.warn(`Erreur lors de la création de l'index pour 'category':`, indexError);
+        // On continue même si l'index n'a pas pu être créé
+      }
+      
       console.log(`Collection ${collectionName} créée avec succès.`);
     } else {
       console.log(`Collection ${collectionName} existe déjà.`);
+      
+      // Vérifier si l'index pour category existe, sinon le créer
+      try {
+        console.log(`Vérification de l'index pour le champ 'category'...`);
+        await client.createPayloadIndex(collectionName, {
+          field_name: 'category',
+          field_schema: 'keyword',
+        });
+        console.log(`Index pour 'category' créé avec succès.`);
+      } catch (indexError: any) {
+        // Si l'erreur indique que l'index existe déjà, c'est OK
+        if (indexError.message && indexError.message.includes('already exists')) {
+          console.log(`L'index pour 'category' existe déjà.`);
+        } else {
+          console.warn(`Erreur lors de la création de l'index pour 'category':`, indexError);
+          // On continue même si l'index n'a pas pu être créé
+        }
+      }
     }
   } catch (error) {
     console.error('Erreur lors de la vérification/création de la collection:', error);
@@ -95,12 +138,16 @@ async function ensureCollection(client: QdrantClient, dimension: number): Promis
   }
 }
 
-// Fonction pour nettoyer, catégoriser et ingérer les embeddings depuis un CSV
+  /**
+   * Ingeste les données d'embeddings à partir d'un fichier CSV.
+   * 
+   * @param filePath - Chemin du fichier CSV contenant les données d'embeddings.
+   * @returns Une promesse qui se résout lorsque l'ingestion est terminée.
+   */
 export async function ingestEmbeddingsFromCsv(
   filePath: string = path.resolve(__dirname, '../../data/salim-embeddings.csv')
 ): Promise<void> {
   try {
-    // Étape 1: Nettoyer et catégoriser le CSV
     console.log('Nettoyage et catégorisation du fichier CSV...');
     const cleanedFilePath = path.resolve(__dirname, '../../data/cleaned-embeddings.csv');
     const categorizedFilePath = path.resolve(__dirname, '../../data/categorized-embeddings.csv');
@@ -208,7 +255,12 @@ export async function ingestEmbeddingsFromCsv(
   }
 }
 
-// Fonction pour convertir les données Qdrant en documents LangChain
+/**
+ * Récupère les documents stockés dans Qdrant.
+ * 
+ * @param category - Optionnel, filtre les documents par catégorie.
+ * @returns Une promesse qui se résout en un tableau de documents.
+ */
 export async function getDocumentsFromQdrant(category?: string): Promise<Document[]> {
   try {
     // Initialiser le client Qdrant avec l'API key si disponible
@@ -228,35 +280,75 @@ export async function getDocumentsFromQdrant(category?: string): Promise<Documen
     
     // Préparer le filtre par catégorie si spécifié
     const filter = category ? {
-      must: [{
-        key: 'category',
-        match: {
-          value: category
+      must: [
+        {
+          key: "category",
+          match: {
+            value: category
+          }
         }
-      }]
+      ]
     } : undefined;
+    
+    console.log('Filtre appliqué:', JSON.stringify(filter, null, 2));
     
     // Récupérer tous les points (avec pagination si nécessaire)
     const limit = 1000;
     let offset = 0;
     const allPoints = [];
     
-    while (true) {
-      const response = await client.scroll(collectionName, {
-        limit,
-        offset,
-        filter
-      });
-      
-      if (response.points.length === 0) {
-        break;
+    try {
+      while (true) {
+        const response = await client.scroll(collectionName, {
+          limit,
+          offset,
+          filter
+        });
+        
+        if (response.points.length === 0) {
+          break;
+        }
+        
+        allPoints.push(...response.points);
+        offset += response.points.length;
+        
+        if (response.points.length < limit) {
+          break;
+        }
       }
-      
-      allPoints.push(...response.points);
-      offset += response.points.length;
-      
-      if (response.points.length < limit) {
-        break;
+    } catch (scrollError: any) {
+      // Si l'erreur est liée à l'index manquant et qu'une catégorie est spécifiée
+      if (category && scrollError.data && scrollError.data.status && 
+          scrollError.data.status.error && 
+          scrollError.data.status.error.includes('Index required but not found')) {
+        console.warn(`Index manquant pour la recherche par catégorie. Récupération de tous les documents et filtrage côté serveur.`);
+        
+        // Récupérer tous les documents sans filtre puis filtrer manuellement
+        while (true) {
+          const response = await client.scroll(collectionName, {
+            limit,
+            offset
+          });
+          
+          if (response.points.length === 0) {
+            break;
+          }
+          
+          // Filtrer manuellement par catégorie
+          const filteredPoints = response.points.filter(point => 
+            point.payload && point.payload.category === category
+          );
+          
+          allPoints.push(...filteredPoints);
+          offset += response.points.length;
+          
+          if (response.points.length < limit) {
+            break;
+          }
+        }
+      } else {
+        // Si c'est une autre erreur, la propager
+        throw scrollError;
       }
     }
     
@@ -285,9 +377,67 @@ export async function getDocumentsFromQdrant(category?: string): Promise<Documen
   }
 }
 
-// Exécuter l'ingestion si ce fichier est appelé directement
+
+
+/**
+ * Ajoute un index pour le champ category à la collection existante.
+ * 
+ * Si l'index existe déjà, l'opération est ignorée. L'index est utilisé pour améliorer
+ * les performances de recherche par catégorie.
+ * 
+ * @returns Une promesse qui se résout lorsque l'index a été ajouté.
+ */
+export async function addCategoryIndex(): Promise<void> {
+  try {
+    console.log('Ajout d\'un index pour le champ category à la collection existante...');
+    
+    // Initialiser le client Qdrant avec l'API key si disponible
+    const qdrantConfig: any = { url: qdrantUrl };
+    if (qdrantApiKey) {
+      qdrantConfig.apiKey = qdrantApiKey;
+    }
+    const client = new QdrantClient(qdrantConfig);
+    
+    // Vérifier que la collection existe
+    const collections = await client.getCollections();
+    const collectionExists = collections.collections.some(c => c.name === collectionName);
+    
+    if (!collectionExists) {
+      throw new Error(`La collection ${collectionName} n'existe pas.`);
+    }
+    
+    // Créer l'index pour le champ category
+    try {
+      await client.createPayloadIndex(collectionName, {
+        field_name: 'category',
+        field_schema: 'keyword',
+      });
+      console.log(`Index pour 'category' créé avec succès.`);
+    } catch (indexError: any) {
+      // Si l'erreur indique que l'index existe déjà, c'est OK
+      if (indexError.message && indexError.message.includes('already exists')) {
+        console.log(`L'index pour 'category' existe déjà.`);
+      } else {
+        console.error(`Erreur lors de la création de l'index pour 'category':`, indexError);
+        throw indexError;
+      }
+    }
+  } catch (error) {
+    console.error('Erreur lors de l\'ajout de l\'index de catégorie:', error);
+    throw error;
+  }
+}
+
 if (require.main === module) {
-  ingestEmbeddingsFromCsv()
-    .then(() => console.log('Ingestion terminée avec succès.'))
-    .catch(error => console.error('Erreur lors de l\'ingestion:', error));
+  // Si le script est exécuté directement, vérifier les arguments
+  const args = process.argv.slice(2);
+  if (args.includes('--add-index')) {
+    addCategoryIndex()
+      .then(() => console.log('Ajout d\'index terminé avec succès.'))
+      .catch(error => console.error('Erreur lors de l\'ajout d\'index:', error));
+  } else {
+    ingestEmbeddingsFromCsv()
+      .then(() => console.log('Ingestion terminée avec succès.'))
+      .catch(error => console.error('Erreur lors de l\'ingestion:', error));
+  }
 }

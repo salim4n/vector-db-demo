@@ -9,6 +9,7 @@
     "dev": "tsx watch src/index.ts",
     "ingest": "tsx src/ingestion/csvIngestion.ts",
     "clean": "tsx src/utils/csvCleaner.ts",
+    "add-index": "tsx src/ingestion/csvIngestion.ts --add-index",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -27,7 +28,6 @@
     "@langchain/community": "^0.0.34",
     "@langchain/core": "^0.1.63",
     "@langchain/langgraph": "^0.2.72",
-    "@langchain/ollama": "^0.2.0",
     "@langchain/openai": "^0.0.14",
     "@qdrant/js-client-rest": "^1.14.0",
     "csv-parse": "^5.6.0",

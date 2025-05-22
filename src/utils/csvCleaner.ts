@@ -32,7 +32,6 @@ const CleanedRecordSchema = z.object({
   created_at: z.string(),
   updated_at: z.string(),
   category_analysis: CategoryAnalysisSchema.optional(),
-  // Garder category pour compatibilité avec le code existant
   category: z.string().optional(),
 });
 
@@ -233,7 +232,12 @@ export async function categorizeRecords(
 }
 
 /**
- * Fonction principale qui nettoie le CSV et ajoute des catégories
+ * Processus le fichier d'embeddings en nettoyant les données et en ajoutant des catégories.
+ * 
+ * @param inputFilePath - Chemin du fichier CSV d'entrée contenant les embeddings.
+ * @param cleanedFilePath - Chemin où le fichier CSV nettoyé sera enregistré.
+ * @param categorizedFilePath - Chemin où le fichier CSV catégorisé sera enregistré.
+ * @returns Une promesse qui se résout lorsque le traitement est terminé.
  */
 export async function processEmbeddingsFile(
   inputFilePath: string = path.resolve(__dirname, '../../data/salim-embeddings.csv'),
@@ -254,7 +258,6 @@ export async function processEmbeddingsFile(
   }
 }
 
-// Exécuter le traitement si ce fichier est appelé directement
 if (require.main === module) {
   processEmbeddingsFile()
     .then(() => console.log('Traitement terminé avec succès.'))

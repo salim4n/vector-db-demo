@@ -7,6 +7,7 @@ import fastifySwaggerUi from '@fastify/swagger-ui';
 import ingestionRoutes from './routes/ingestion';
 import documentsRoutes from './routes/documents';
 import healthRoutes from './routes/health';
+import searchRoutes from './routes/search';
 
 dotenv.config();
 
@@ -14,7 +15,6 @@ const server: FastifyInstance = Fastify({
   logger: true
 });
 
-// Les routes sont maintenant définies dans la fonction registerRoutes()
 
 // Configurer Swagger
 async function setupSwagger() {
@@ -30,8 +30,8 @@ async function setupSwagger() {
       tags: [
         { name: 'ingestion', description: 'Endpoints d\'ingestion de données' },
         { name: 'documents', description: 'Endpoints de récupération de documents' },
-        { name: 'catégories', description: 'Endpoints de gestion des catégories' },
-        { name: 'santé', description: 'Endpoints de santé de l\'application' }
+        { name: 'santé', description: 'Endpoints de santé de l\'application' },
+        { name: 'recherche', description: 'Endpoints de recherche sémantique' }
       ]
     }
   });
@@ -55,6 +55,9 @@ async function registerRoutes() {
   
   // Enregistrer les routes de santé
   await server.register(healthRoutes);
+  
+  // Enregistrer les routes de recherche
+  await server.register(searchRoutes);
 }
 
 // Démarrer le serveur
