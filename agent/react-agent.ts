@@ -1,12 +1,13 @@
 import { ChatOpenAI } from '@langchain/openai';
-import { AgentExecutor, createOpenAIFunctionsAgent, createReactAgent } from 'langchain/agents';
+import { AgentExecutor, createReactAgent } from 'langchain/agents';
 import { pull } from 'langchain/hub';
+import { DynamicTool } from '@langchain/core/tools';
 import dotenv from 'dotenv';
 
-// Import des outils personnalisés
-import { filterPerCategoryTool } from './tools/filter-per-category';
-import { advancedFilteringTool } from './tools/advanced-filtering';
-import { semanticSearchTool } from './tools/retrieval';
+// Import des fonctions originales pour les convertir en DynamicTools
+import { semanticSearch } from './tools/retrieval';
+import { filterPerCategory } from './tools/filter-per-category';
+import { advancedFiltering } from './tools/advanced-filtering';
 
 dotenv.config();
 
@@ -34,80 +35,201 @@ const DEFAULT_CONFIG: AgentConfig = {
   verbose: false
 };
 
-/**
- * Crée et configure un agent ReAct pour interagir avec la base de données vectorielle.
- * 
- * @param config - Configuration optionnelle pour personnaliser l'agent
- * @returns Un AgentExecutor prêt à être utilisé
- */
+const semanticSearchTool = new DynamicTool({
+  name: "semanticSearch",
+  description: "Recherche des documents pertinents en fonction d'une requête en langage naturel. Utile pour trouver des informations spécifiques dans la base de documents.",
+  func: async (input: string) => {
+    try {
+      let params: any;
+      
+      if (input.trim().startsWith('{')) {
+        try {
+          params = JSON.parse(input);
+        } catch (e) {
+          const fixedInput = input
+            .replace(/(['\"'])?([a-zA-Z0-9_]+)(['\"'])?:/g, '"$2":') 
+            .replace(/'/g, '"'); 
+          
+          try {
+            params = JSON.parse(fixedInput);
+          } catch (e2) {
+            params = { query: input };
+          }
+        }
+      } else {
+        params = { query: input };
+      }
+      
+      if (!params.query) {
+        return JSON.stringify({
+          success: false,
+          error: "Le paramètre 'query' est requis pour la recherche sémantique"
+        }, null, 2);
+      }
+      
+      const documents = await semanticSearch(params);
+      
+      return JSON.stringify({
+        success: true,
+        count: documents.length,
+        query: params.query,
+        documents: documents.map(doc => ({
+          content: doc.pageContent,
+          metadata: {
+            ...doc.metadata,
+            score: doc.metadata.score ? Math.round(doc.metadata.score * 100) / 100 : undefined
+          }
+        }))
+      }, null, 2);
+    } catch (error) {
+      return JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      }, null, 2);
+    }
+  }
+});
+
+const filterPerCategoryTool = new DynamicTool({
+  name: "filterPerCategory",
+  description: "Filtre les documents par catégorie. Utile quand l'utilisateur veut voir uniquement les documents d'une catégorie spécifique.",
+  func: async (input: string) => {
+    try {
+      let category: string;
+      
+      if (input.trim().startsWith('{')) {
+        try {
+          const params = JSON.parse(input);
+          category = params.category;
+        } catch (e) {
+          const fixedInput = input
+            .replace(/(['\"'])?([a-zA-Z0-9_]+)(['\"'])?:/g, '"$2":') 
+            .replace(/'/g, '"');
+          
+          try {
+            const params = JSON.parse(fixedInput);
+            category = params.category;
+          } catch (e2) {
+            category = input;
+          }
+        }
+      } else {
+        category = input;
+      }
+      
+      if (!category) {
+        return JSON.stringify({
+          success: false,
+          error: "Le paramètre 'category' est requis pour le filtrage par catégorie"
+        }, null, 2);
+      }
+      
+      const documents = await filterPerCategory(category);
+      
+      return JSON.stringify({
+        success: true,
+        count: documents.length,
+        category,
+        documents: documents.map(doc => ({
+          content: doc.pageContent,
+          metadata: doc.metadata
+        }))
+      }, null, 2);
+    } catch (error) {
+      return JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      }, null, 2);
+    }
+  }
+});
+
+const advancedFilteringTool = new DynamicTool({
+  name: "advancedFiltering",
+  description: "Filtre les documents avec des critères avancés comme les catégories, les scores et les mots-clés.",
+  func: async (input: string) => {
+    try {
+      let params: any;
+      
+      if (input.trim().startsWith('{')) {
+        try {
+          params = JSON.parse(input);
+        } catch (e) {
+          const fixedInput = input
+            .replace(/(['\"'])?([a-zA-Z0-9_]+)(['\"'])?:/g, '"$2":') 
+            .replace(/'/g, '"');
+          
+          try {
+            params = JSON.parse(fixedInput);
+          } catch (e2) {
+            return JSON.stringify({
+              success: false,
+              error: "Format d'entrée invalide pour le filtrage avancé"
+            }, null, 2);
+          }
+        }
+      } else {
+        return JSON.stringify({
+          success: false,
+          error: "Format d'entrée invalide pour le filtrage avancé. Attendu: objet JSON avec des paramètres de filtrage."
+        }, null, 2);
+      }
+      
+      if (!params.mainCategory && !params.categories && !params.minScore && !params.reasoningKeywords) {
+        return JSON.stringify({
+          success: false,
+          error: "Au moins un paramètre de filtrage est requis (mainCategory, categories, minScore, reasoningKeywords)"
+        }, null, 2);
+      }
+      
+      const documents = await advancedFiltering(params);
+      
+      return JSON.stringify({
+        success: true,
+        count: documents.length,
+        filters: params,
+        documents: documents.map(doc => ({
+          content: doc.pageContent,
+          metadata: doc.metadata
+        }))
+      }, null, 2);
+    } catch (error) {
+      return JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      }, null, 2);
+    }
+  }
+});
+
 export async function createVectorDBAgent(config: AgentConfig = {}): Promise<AgentExecutor> {
-  // Fusionner la configuration par défaut avec celle fournie
   const finalConfig = { ...DEFAULT_CONFIG, ...config };
   
-  // Initialiser le modèle de langage
   const model = new ChatOpenAI({
     modelName: finalConfig.model,
     temperature: finalConfig.temperature,
   });
   
-  // Sélectionner les outils à utiliser
-  const allTools = [filterPerCategoryTool, advancedFilteringTool, semanticSearchTool];
-  let selectedTools = allTools;
+  const allTools = [semanticSearchTool, filterPerCategoryTool, advancedFilteringTool];
   
+  let selectedTools = allTools;
   if (finalConfig.tools && !finalConfig.tools.includes('all')) {
     selectedTools = allTools.filter(tool => finalConfig.tools?.includes(tool.name));
   }
   
-  // Créer le prompt pour l'agent
   const prompt = await pull<any>("hwchase17/react");
   
-
-
-  /**
-   * Crée un agent OpenAI Functions configuré avec le modèle de langage spécifié,
-   * les outils et le prompt. Cet agent est capable de traiter des requêtes en langage
-   * naturel et d'utiliser les outils fournis pour effectuer des tâches ou récupérer
-   * des informations.
-   *
-   * @param llm - Le modèle de langage à utiliser pour la génération de texte
-   * @param tools - Les outils à mettre à disposition de l'agent
-   * @param prompt - Le prompt pour l'agent qui définit les messages de système et d'utilisateur
-   * @returns Un agent OpenAI Functions prêt à être utilisé
-   */
-  const agent = await createOpenAIFunctionsAgent({
+  const agent = await createReactAgent({
     llm: model,
     tools: selectedTools,
     prompt
   });
-
-  /**
-   * Crée un agent ReAct qui peut interagir avec la base de données vectorielle
-   * en utilisant les outils de recherche et de filtrage fournis.
-   * 
-   * @param llm - Le modèle de langage à utiliser pour la génération de texte
-   * @param tools - Les outils à mettre à disposition de l'agent
-   * @param prompt - Le prompt pour l'agent qui définit les messages de système et d'utilisateur
-   * @returns Un agent ReAct prêt à être utilisé
-   */
-  const reactAgent = await createReactAgent({
-    llm: model,
-    tools: selectedTools,
-    prompt
-  }); 
   
-  /**
-   * Crée un exécuteur d'agent qui peut interagir avec la base de données vectorielle
-   * en utilisant les outils de recherche et de filtrage fournis.
-   * 
-   * @param agent - L'agent à exécuter
-   * @param tools - Les outils à mettre à disposition de l'agent
-   * @param verbose - Mode verbose pour le debugging
-   * @returns Un exécuteur d'agent prêt à être utilisé
-   */
-  const agentExecutor = new AgentExecutor({
-    agent: reactAgent,
+  const agentExecutor = AgentExecutor.fromAgentAndTools({
+    agent,
     tools: selectedTools,
-    verbose: finalConfig.verbose
+    verbose: finalConfig.verbose,
+    maxIterations: 10
   });
   
   return agentExecutor;
@@ -120,20 +242,62 @@ export async function createVectorDBAgent(config: AgentConfig = {}): Promise<Age
  * @param config - Configuration optionnelle pour l'agent
  * @returns La réponse de l'agent
  */
-export async function queryVectorDBAgent(query: string, config: AgentConfig = { model: process.env.GPT_MODEL,temperature: 0,tools: ['all'],verbose: false }): Promise<string> {
+export async function queryVectorDBAgent(query: string, config: AgentConfig = { model: process.env.GPT_MODEL, temperature: 0, tools: ['all'], verbose: false }): Promise<string> {
   try {
     // Créer l'agent
     const agent = await createVectorDBAgent(config);
     
+    // Ajouter des instructions pour guider l'agent à utiliser les outils de filtrage
+    const enhancedQuery = `
+Recherche dans notre base de données de documents vectorielle.
+
+STRATÉGIE DE RECHERCHE RECOMMANDÉE:
+1. Commence par utiliser l'outil semanticSearch pour trouver des documents pertinents
+2. Si les résultats ne sont pas assez précis, utilise filterPerCategory pour filtrer par catégorie
+3. Pour des résultats encore plus précis, utilise advancedFiltering avec des paramètres comme:
+   - mainCategory: catégorie principale
+   - minScore: score minimum (entre 0 et 1)
+   - reasoningKeywords: mots-clés spécifiques
+
+QUESTION: ${query}
+
+N'hésite pas à combiner plusieurs outils pour obtenir les meilleurs résultats.`;
+    
     // Exécuter la requête
     const result = await agent.invoke({
-      input: query
+      input: enhancedQuery
     });
     
     // Retourner la réponse
     return result.output;
   } catch (error) {
     console.error('Erreur lors de l\'exécution de l\'agent:', error);
+    
+    // Essayer avec une stratégie de secours si l'erreur est liée aux outils
+    if (error instanceof Error && 
+        (error.message.includes('schema') || 
+         error.message.includes('tool') || 
+         error.message.includes('parsing'))) {
+      try {
+        console.log('Tentative avec une stratégie de secours...');
+        
+        // Créer un nouvel agent avec seulement l'outil de recherche sémantique
+        const backupAgent = await createVectorDBAgent({
+          ...config,
+          tools: ['semanticSearch']
+        });
+        
+        // Exécuter une recherche simple
+        const backupResult = await backupAgent.invoke({
+          input: `Recherche simple: ${query}`
+        });
+        
+        return backupResult.output;
+      } catch (backupError) {
+        console.error('Erreur lors de la stratégie de secours:', backupError);
+      }
+    }
+    
     return `Erreur: ${error instanceof Error ? error.message : String(error)}`;
   }
 }

@@ -101,6 +101,78 @@ export default async function agentRoutes(fastify: FastifyInstance) {
           });
         }
         
+        // Vérification préliminaire pour détecter si la question est complètement hors sujet
+        // Liste de mots-clés très spécifiques qui indiquent des questions clairement hors domaine
+        const nonTechnicalKeywords = [
+          'recette', 'cuisine', 'tarte', 'gâteau', 'cuisson', 'pâtisserie',
+          'sport', 'football', 'tennis', 'basketball', 'match',
+          'film', 'cinéma', 'acteur', 'actrice', 'regarder',
+          'voyage', 'hôtel', 'réservation', 'billet', 'vol',
+          'restaurant', 'manger', 'diner', 'déjeuner'
+        ];
+        
+        // Liste de mots-clés techniques qui indiquent des questions potentiellement pertinentes
+        const technicalKeywords = [
+          // Termes généraux
+          'document', 'documents', 'base de données', 'vectorielle', 'recherche',
+          'catégorie', 'filtrer', 'filtrage', 'score', 'similarité', 'embedding',
+          'information', 'informations', 'texte', 'contenu',
+          
+          // IA et ML
+          'machine learning', 'ml', 'deep learning', 'apprentissage', 'modèle', 'modèles',
+          'ia', 'intelligence artificielle', 'ai', 'artificial intelligence',
+          'nlp', 'traitement du langage', 'natural language', 'language model',
+          
+          // Technologies spécifiques
+          'transformer', 'transformers', 'hugging face', 'bert', 'gpt', 'llm',
+          'tensorflow', 'tf', 'tfjs', 'pytorch', 'torch', 'keras',
+          'vectorisé', 'vectorisation', 'semantic', 'sémantique', 'qdrant',
+          'openai', 'embedding', 'embeddings', 'vector', 'vecteur',
+          
+          // Frameworks et librairies
+          'react', 'angular', 'vue', 'svelte', 'node', 'javascript', 'typescript',
+          'python', 'java', 'c++', 'rust', 'go', 'ruby', 'php'
+        ];
+        
+        const queryLower = query.toLowerCase();
+        
+        // Vérifier si la question contient des mots-clés non techniques
+        const containsNonTechnical = nonTechnicalKeywords.some(keyword => 
+          queryLower.includes(keyword.toLowerCase())
+        );
+        
+        // Vérifier si la question contient des mots-clés techniques
+        const containsTechnical = technicalKeywords.some(keyword => 
+          queryLower.includes(keyword.toLowerCase())
+        );
+        
+        // Si la question contient des mots-clés non techniques ET ne contient pas de mots-clés techniques,
+        // alors elle est probablement hors sujet
+        if (containsNonTechnical && !containsTechnical) {
+          return {
+            success: false,
+            query,
+            response: `Désolé, je ne peux pas répondre à cette question car elle ne semble pas être liée aux documents dans notre base de données. Cet agent est spécialisé dans la recherche et le filtrage de documents techniques. Veuillez poser une question concernant les documents stockés dans la base de données vectorielle, comme par exemple: "Quels documents parlent de transformers?" ou "Trouve-moi des informations sur le machine learning".`,
+            executionTime: Date.now() - startTime,
+            toolsUsed: [],
+            error: 'QUERY_NOT_RELEVANT'
+          };
+        }
+        
+        // Pour les questions très courtes (moins de 4 mots) qui ne contiennent aucun mot-clé technique,
+        // demander plus de précisions
+        const wordCount = query.split(/\s+/).length;
+        if (wordCount < 4 && !containsTechnical) {
+          return {
+            success: false,
+            query,
+            response: `Votre question est trop courte ou manque de contexte technique. Pourriez-vous la reformuler en précisant ce que vous recherchez dans notre base de données de documents techniques? Par exemple: "Quels documents parlent de X?" ou "Trouve-moi des informations sur Y".`,
+            executionTime: Date.now() - startTime,
+            toolsUsed: [],
+            error: 'QUERY_TOO_VAGUE'
+          };
+        }
+        
         // Si 'all' est présent, on utilise tous les outils
         const selectedTools = tools.includes('all') 
           ? ['all'] 
