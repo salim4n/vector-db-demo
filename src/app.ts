@@ -8,6 +8,7 @@ import ingestionRoutes from './routes/ingestion';
 import documentsRoutes from './routes/documents';
 import healthRoutes from './routes/health';
 import searchRoutes from './routes/search';
+import agentRoutes from './routes/agent';
 
 dotenv.config();
 
@@ -31,7 +32,8 @@ async function setupSwagger() {
         { name: 'ingestion', description: 'Endpoints d\'ingestion de données' },
         { name: 'documents', description: 'Endpoints de récupération de documents' },
         { name: 'santé', description: 'Endpoints de santé de l\'application' },
-        { name: 'recherche', description: 'Endpoints de recherche sémantique' }
+        { name: 'recherche', description: 'Endpoints de recherche sémantique' },
+        { name: 'agent', description: 'Endpoints pour interagir avec l\'agent ReAct' }
       ]
     }
   });
@@ -58,6 +60,9 @@ async function registerRoutes() {
   
   // Enregistrer les routes de recherche
   await server.register(searchRoutes);
+  
+  // Enregistrer les routes de l'agent
+  await server.register(agentRoutes);
 }
 
 // Démarrer le serveur
