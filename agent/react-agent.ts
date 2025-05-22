@@ -7,7 +7,6 @@ import dotenv from 'dotenv';
 // Import des fonctions originales pour les convertir en DynamicTools
 import { semanticSearch } from './tools/retrieval';
 import { filterPerCategory } from './tools/filter-per-category';
-import { advancedFiltering } from './tools/advanced-filtering';
 
 dotenv.config();
 
@@ -144,63 +143,65 @@ const filterPerCategoryTool = new DynamicTool({
   }
 });
 
-const advancedFilteringTool = new DynamicTool({
-  name: "advancedFiltering",
-  description: "Filtre les documents avec des critères avancés comme les catégories, les scores et les mots-clés.",
-  func: async (input: string) => {
-    try {
-      let params: any;
+//----------------------------BROKEN--------------------------------//
+// const advancedFilteringTool = new DynamicTool({
+//   name: "advancedFiltering",
+//   description: "Filtre les documents avec des critères avancés comme les catégories, les scores et les mots-clés.",
+//   func: async (input: string) => {
+//     try {
+//       let params: any;
       
-      if (input.trim().startsWith('{')) {
-        try {
-          params = JSON.parse(input);
-        } catch (e) {
-          const fixedInput = input
-            .replace(/(['\"'])?([a-zA-Z0-9_]+)(['\"'])?:/g, '"$2":') 
-            .replace(/'/g, '"');
+//       if (input.trim().startsWith('{')) {
+//         try {
+//           params = JSON.parse(input);
+//         } catch (e) {
+//           const fixedInput = input
+//             .replace(/(['\"'])?([a-zA-Z0-9_]+)(['\"'])?:/g, '"$2":') 
+//             .replace(/'/g, '"');
           
-          try {
-            params = JSON.parse(fixedInput);
-          } catch (e2) {
-            return JSON.stringify({
-              success: false,
-              error: "Format d'entrée invalide pour le filtrage avancé"
-            }, null, 2);
-          }
-        }
-      } else {
-        return JSON.stringify({
-          success: false,
-          error: "Format d'entrée invalide pour le filtrage avancé. Attendu: objet JSON avec des paramètres de filtrage."
-        }, null, 2);
-      }
+//           try {
+//             params = JSON.parse(fixedInput);
+//           } catch (e2) {
+//             return JSON.stringify({
+//               success: false,
+//               error: "Format d'entrée invalide pour le filtrage avancé"
+//             }, null, 2);
+//           }
+//         }
+//       } else {
+//         return JSON.stringify({
+//           success: false,
+//           error: "Format d'entrée invalide pour le filtrage avancé. Attendu: objet JSON avec des paramètres de filtrage."
+//         }, null, 2);
+//       }
       
-      if (!params.mainCategory && !params.categories && !params.minScore && !params.reasoningKeywords) {
-        return JSON.stringify({
-          success: false,
-          error: "Au moins un paramètre de filtrage est requis (mainCategory, categories, minScore, reasoningKeywords)"
-        }, null, 2);
-      }
+//       if (!params.mainCategory && !params.categories && !params.minScore && !params.reasoningKeywords) {
+//         return JSON.stringify({
+//           success: false,
+//           error: "Au moins un paramètre de filtrage est requis (mainCategory, categories, minScore, reasoningKeywords)"
+//         }, null, 2);
+//       }
       
-      const documents = await advancedFiltering(params);
+//       const documents = await advancedFiltering(params);
       
-      return JSON.stringify({
-        success: true,
-        count: documents.length,
-        filters: params,
-        documents: documents.map(doc => ({
-          content: doc.pageContent,
-          metadata: doc.metadata
-        }))
-      }, null, 2);
-    } catch (error) {
-      return JSON.stringify({
-        success: false,
-        error: error instanceof Error ? error.message : String(error)
-      }, null, 2);
-    }
-  }
-});
+//       return JSON.stringify({
+//         success: true,
+//         count: documents.length,
+//         filters: params,
+//         documents: documents.map(doc => ({
+//           content: doc.pageContent,
+//           metadata: doc.metadata
+//         }))
+//       }, null, 2);
+//     } catch (error) {
+//       return JSON.stringify({
+//         success: false,
+//         error: error instanceof Error ? error.message : String(error)
+//       }, null, 2);
+//     }
+//   }
+// });
+//------------------------------------------------------------------//
 
 export async function createVectorDBAgent(config: AgentConfig = {}): Promise<AgentExecutor> {
   const finalConfig = { ...DEFAULT_CONFIG, ...config };
@@ -210,13 +211,14 @@ export async function createVectorDBAgent(config: AgentConfig = {}): Promise<Age
     temperature: finalConfig.temperature,
   });
   
-  const allTools = [semanticSearchTool, filterPerCategoryTool, advancedFilteringTool];
+  const allTools = [semanticSearchTool, filterPerCategoryTool];
   
   let selectedTools = allTools;
   if (finalConfig.tools && !finalConfig.tools.includes('all')) {
     selectedTools = allTools.filter(tool => finalConfig.tools?.includes(tool.name));
   }
   
+  // Utiliser le prompt standard sans personnalisation complexe
   const prompt = await pull<any>("hwchase17/react");
   
   const agent = await createReactAgent({
@@ -250,6 +252,12 @@ export async function queryVectorDBAgent(query: string, config: AgentConfig = { 
     // Ajouter des instructions pour guider l'agent à utiliser les outils de filtrage
     const enhancedQuery = `
 Recherche dans notre base de données de documents vectorielle.
+
+INSTRUCTIONS IMPORTANTES:
+- Tu es un agent ReAct qui doit suivre un format strict: Thought → Action → Action Input → Observation → Thought → ...
+- Après chaque réflexion (Thought), tu DOIS choisir une action (Action) puis spécifier les paramètres (Action Input)
+- Tu ne peux JAMAIS écrire deux "Thought:" consécutifs sans "Action:" entre eux
+- Pour conclure, utilise "Final Answer:" suivi de ta réponse complète
 
 STRATÉGIE DE RECHERCHE RECOMMANDÉE:
 1. Commence par utiliser l'outil semanticSearch pour trouver des documents pertinents

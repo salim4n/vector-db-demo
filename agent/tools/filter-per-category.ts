@@ -19,8 +19,9 @@ import { z } from 'zod';
  * @returns Une liste de documents correspondant à la catégorie spécifiée
  */
 export async function filterPerCategory(category: string): Promise<Document[]> {
-  const documents = await getDocumentsFromQdrant();
-  return documents.filter(doc => doc.metadata.category === category);
+  // Passer directement la catégorie à getDocumentsFromQdrant pour filtrer au niveau de la base de données
+  // plutôt que de filtrer en mémoire après avoir récupéré tous les documents
+  return await getDocumentsFromQdrant(category);
 }
 
 /**
