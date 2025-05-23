@@ -1,4 +1,5 @@
-import { getDocumentsFromQdrant } from '../../src/ingestion/csvIngestion';
+
+import { getDocumentsFromQdrant } from '@/ingestion/csvIngestion';
 import { Document } from '@langchain/core/documents';
 import { StructuredTool, DynamicTool } from '@langchain/core/tools';
 import { z } from 'zod';

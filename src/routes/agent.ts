@@ -1,9 +1,9 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { queryVectorDBAgent } from '../../agent/react-agent';
-import { filterPerCategoryTool } from '../../agent/tools/filter-per-category';
-import { advancedFilteringTool } from '../../agent/tools/advanced-filtering';
-import { semanticSearchTool } from '../../agent/tools/retrieval';
+import { queryVectorDBAgent } from '@/agent/react-agent';
+import { filterPerCategoryTool } from '@/agent/tools/filter-per-category';
+import { advancedFilteringTool } from '@/agent/tools/advanced-filtering';
+import { semanticSearchTool } from '@/agent/tools/retrieval';
 
 // Liste des outils disponibles pour l'agent
 const AVAILABLE_TOOLS = [

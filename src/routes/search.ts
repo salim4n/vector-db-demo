@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { semanticSearch } from '../../agent/tools/retrieval';
-import { advancedFiltering } from '../../agent/tools/advanced-filtering';
+import { semanticSearch } from '@/agent/tools/retrieval';
+import { advancedFiltering } from '@/agent/tools/advanced-filtering';
 
 /**
  * Routes pour la recherche de documents
