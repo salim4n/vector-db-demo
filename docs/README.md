@@ -28,8 +28,8 @@ Le projet utilise les technologies suivantes :
 Pour démarrer le projet, suivez les étapes suivantes :
 
 1. Clonez le dépôt
-2. Installez les dépendances avec `npm install`
+2. Installez les dépendances avec `pnpm install`
 3. Configurez les variables d'environnement dans un fichier `.env`
-4. Lancez l'application avec `npm start`
+4. Lancez l'application avec `pnpm start`
 
 Pour plus de détails, consultez les sections correspondantes de la documentation.

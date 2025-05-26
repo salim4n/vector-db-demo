@@ -262,10 +262,6 @@ INSTRUCTIONS IMPORTANTES:
 STRATÉGIE DE RECHERCHE RECOMMANDÉE:
 1. Commence par utiliser l'outil semanticSearch pour trouver des documents pertinents
 2. Si les résultats ne sont pas assez précis, utilise filterPerCategory pour filtrer par catégorie
-3. Pour des résultats encore plus précis, utilise advancedFiltering avec des paramètres comme:
-   - mainCategory: catégorie principale
-   - minScore: score minimum (entre 0 et 1)
-   - reasoningKeywords: mots-clés spécifiques
 
 QUESTION: ${query}
 
